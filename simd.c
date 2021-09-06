@@ -54,6 +54,58 @@ void swap(__m128 *a, __m128 *b)
     *a = _mm_xor_ps(*a, *b);
 }
 
+void branchless_filter_example(void)
+{
+   int val[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+   int out[8] = {0};
+   int ptr2[4] = {3, 3, 3, 3};
+   int ptr3[4] = {6, 6, 6, 6};
+   int i, j;
+   int size = 8;
+   int span = 1;
+
+   __m128 lower_bound = _mm_load_ps((float *) ptr2);
+   __m128 upper_bound = _mm_load_ps((float *) ptr3);
+   ginverter = _mm_load_ps((float *)ginverter_ptr);
+
+
+   for(i = 0; i < 8; i = i + 4)
+   {
+       __m128 toFilter = _mm_load_ps((float *)&val[i]);
+       __m128 output;
+       output = get_values_in_between(lower_bound, upper_bound, toFilter);
+       _mm_store_ps((float *) &out[i], output);
+   }
+
+   i = 0;
+   while(i + span < 8)
+   {
+      int isZero = (0 == out[i]);
+
+      // out[i] = isZero ? out[i + span] : out[i];
+      out[i] = (isZero * out[i + span]) + (!isZero * out[i]);
+
+      // out[i + span] = isZero ?  0 : out[i + span];
+      out[i + span] = !isZero * out[i + span];
+
+      // i = isZero ? i : i + 1;
+      i = i + !isZero;
+
+      // we increase the span only if we have just encountered a
+      // 0 at out[i] and at out[i + span], that is, if we have already used out[i + span], we can not use it again and must increment.
+      // span points to what value we are considering to use as a replacement
+      // int increment = 0;
+      // if(0 == out[i] && 0 == out[i + span])
+      // { increment = 1; }
+      // span = span + increment;
+      span = span + (0 == out[i]) * (0 == out[i + span]);
+   }
+   for(i = 0 ; i < size; ++i)
+   {
+     printf("%d\n", out[i]);
+   }
+}
+
 int main(void) {
   int i;
   int ptr[4]  = {5, 7, 3, 2};
